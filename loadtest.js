@@ -199,3 +199,20 @@ export default function () {
 
   sleep(2);
 }
+
+export function handleSummary(data) {
+  return {
+    'summary.md': `## 🚀 Load Test Results
+
+- **Requests Failed:** ${(data.metrics.http_req_failed.values.rate * 100).toFixed(2)}%
+- **P95 Latency:** ${data.metrics.http_req_duration.values['p(95)'].toFixed(2)} ms
+- **Total Iterations:** ${data.metrics.iterations.values.count}
+
+### ✅ Checks
+- **Succeeded (Passes):** ${data.metrics.checks.values.passes}
+- **Failed (Fails):** ${data.metrics.checks.values.fails}
+
+Refer to the Console Logs for full details.
+`,
+  };
+}

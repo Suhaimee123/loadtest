@@ -3,7 +3,7 @@ name: Manual Load Test with k6
 on:
   workflow_dispatch: # ทำให้มีปุ่มกด Run workflow ในหน้าเว็บ GitHub
   schedule:
-    - cron: '0 */2 * * *' # รันอัตโนมัติทุกๆ 2 ชั่วโมง
+    - cron: '0 */2 * * *' # รันอัตโนมัติทุกๆ 2ชั่วโมง
 
 jobs:
   k6_load_test:
@@ -19,30 +19,13 @@ jobs:
         uses: grafana/k6-action@v0.3.1
         with:
           filename: loadtest.js
-          flags: --summary-export=result.json
 
       - name: Generate Summary
         if: always()
         run: |
-          echo "## 🚀 Load Test Results" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f "result.json" ]; then
-            # ดึงค่าแบบ Safe (รองรับทั้ง p(95) และ p95)
-            FAILED_RATE=$(jq -r '.metrics.http_req_failed.values.rate // 0' result.json)
-            P95_MS=$(jq -r '.metrics.http_req_duration.values["p(95)"] // 0' result.json)
-            TOTAL_ITERS=$(jq -r '.metrics.iterations.values.count // 0' result.json)
-            
-            # คำนวณและจัดฟอร์แมตตัวเลขด้วย awk
-            FAILED_PERCENT=$(echo "$FAILED_RATE" | awk '{printf "%.2f", $1 * 100}')
-            P95_ROUND=$(echo "$P95_MS" | awk '{printf "%.2f", $1}')
-            
-            echo "- **Requests Failed:** $FAILED_PERCENT%" >> $GITHUB_STEP_SUMMARY
-            echo "- **P95 Latency:** $P95_ROUND ms" >> $GITHUB_STEP_SUMMARY
-            echo "- **Total Iterations:** $TOTAL_ITERS" >> $GITHUB_STEP_SUMMARY
+          if [ -f "summary.md" ]; then
+            cat summary.md >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ Error: result.json not found. Check k6 logs for details." >> $GITHUB_STEP_SUMMARY
+            echo "## ❌ Error: summary.md not found" >> $GITHUB_STEP_SUMMARY
+            echo "Check k6 console logs for errors." >> $GITHUB_STEP_SUMMARY
           fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ✅ Checks" >> $GITHUB_STEP_SUMMARY
-          echo "Refer to the Console Logs or JSON result for full details." >> $GITHUB_STEP_SUMMARY
