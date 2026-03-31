@@ -1,22 +1,21 @@
 name: Manual Load Test with k6
 
 on:
-  push:
-    branches: [ main ] # รันทันทีเมื่อมีการ push
   workflow_dispatch: # ทำให้มีปุ่มกด Run workflow ในหน้าเว็บ GitHub
   schedule:
-    - cron: '*/2 * * * *' # รันอัตโนมัติทุกๆ 2 นาที
+    - cron: '0 */2 * * *' # รันอัตโนมัติทุกๆ 2 ชั่วโมง
 
 jobs:
   k6_load_test:
-    name: Run k6 Load Test
-    runs-on: ubuntu-latest # ใช้เครื่อง Linux ของ GitHub ฟรี
+    name: k6 Load Test
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Run k6 test
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: loadtest.js # ชื่อไฟล์สคริปต์ k6 ของคุณ
+        uses: grafana/setup-k6-action@v1
+
+      - name: Execute load test
+        run: k6 run loadtest.js
