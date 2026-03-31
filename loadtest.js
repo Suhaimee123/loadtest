@@ -24,11 +24,7 @@ function randomString(length) {
 
 export default function () {
   const baseUrl = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api';
-  const params = {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  };
+  const adminId = "UTT1cWu772MXhrnORl2kWGion8F3";
 
   // 1. Verify Override Token
   const verifyUrl = `${baseUrl}/guest/override/verify`;
@@ -36,16 +32,20 @@ export default function () {
     code: "1001",
     reason: "จำเป็นต้องอนุญาตการเข้าถึงตำแหน่งก่อนใช้งาน",
     pid: "jQJocFrLRF",
-    id: "UTT1cWu772MXhrnORl2kWGion8F3"
+    id: adminId
   });
 
-  const verifyRes = http.post(verifyUrl, verifyPayload, params);
+  const verifyRes = http.post(verifyUrl, verifyPayload, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-guest-admin-id': adminId,
+    }
+  });
+
   check(verifyRes, {
     'verify status is 200': (r) => r.status === 200,
     'verify has token': (r) => r.json().token !== undefined,
   });
-
- 
 
   if (verifyRes.status !== 200) {
     console.error(`Verify failed: ${verifyRes.status} ${verifyRes.body}`);
@@ -53,19 +53,27 @@ export default function () {
   }
 
   const token = verifyRes.json().token;
-
   const guestKey = randomString(24);
+
+  sleep(2);
 
   // 2. Create Session
   const sessionUrl = `${baseUrl}/guest/sessions`;
   const sessionPayload = JSON.stringify({
     pid: "jQJocFrLRF",
-    id: "UTT1cWu772MXhrnORl2kWGion8F3",
+    id: adminId,
     guestKey: guestKey,
     overrideToken: token
   });
 
-  const sessionRes = http.post(sessionUrl, sessionPayload, params);
+  const sessionRes = http.post(sessionUrl, sessionPayload, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-guest-admin-id': adminId,
+      'x-guest-override-token': token,
+    }
+  });
+
   check(sessionRes, {
     'session status is 200': (r) => r.status === 200,
     'session has sessionId': (r) => r.json().sessionId !== undefined,
@@ -82,6 +90,14 @@ export default function () {
   sleep(2);
 
   const sessionId = sessionRes.json().sessionId;
+  
+  // Common headers for subsequent events/orders
+  const commonHeaders = {
+    'Content-Type': 'application/json',
+    'x-guest-admin-id': adminId,
+    'x-guest-override-token': token,
+    'x-guest-session-id': sessionId,
+  };
 
   // 3. Send "Add to Cart" Event
   const eventsUrl = `${baseUrl}/guest/events`;
@@ -117,7 +133,7 @@ export default function () {
     }
   });
 
-  const eventRes = http.post(eventsUrl, eventPayload, params);
+  const eventRes = http.post(eventsUrl, eventPayload, { headers: commonHeaders });
   check(eventRes, {
     'event status is 200': (r) => r.status === 200,
   });
@@ -170,7 +186,7 @@ export default function () {
     membersId: guestKey
   });
 
-  const orderRes = http.post(orderUrl, orderPayload, params);
+  const orderRes = http.post(orderUrl, orderPayload, { headers: commonHeaders });
   check(orderRes, {
     'order status is 200': (r) => r.status === 200,
   });
