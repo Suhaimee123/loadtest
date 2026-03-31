@@ -3,11 +3,9 @@ import { check, sleep } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '5m', target: 50 },  // 5 นาทีแรก: ค่อยๆ เพิ่มคนเป็น 50 คน
-    { duration: '10m', target: 50 }, // 10 นาทีต่อมา: ยิงแช่ไว้ที่ 50 คน ดูความเสถียร
-    { duration: '5m', target: 200 }, // 5 นาทีต่อมา: อัดเพิ่มเป็น 200 คน (น่าจะเริ่มแตะ Max 3 Instances)
-    { duration: '1h', target: 200 },  // ยิงยาว 1 ชม. ที่ 200 คน เพื่อดู Load ระยะยาว
-    { duration: '10m', target: 0 },  // 10 นาทีสุดท้าย: ค่อยๆ ลดคนลงจนเหลือ 0
+    { duration: '2m', target: 50 },  // 2 นาทีแรก: ค่อยๆ เพิ่มคนเป็น 50 คน
+    { duration: '6m', target: 50 },  // 6 นาทีต่อมา: ยิงแช่ไว้ที่ 50 คน ดูความเสถียร
+    { duration: '2m', target: 0 },   // 2 นาทีสุดท้าย: ค่อยๆ ลดคนลงจนเหลือ 0 (รวมเป็น 10 นาทีพอดี)
   ],
   thresholds: {
     http_req_failed: ['rate<0.01'], // ตั้งเป้าว่า Error ต้องน้อยกว่า 1%
@@ -15,23 +13,173 @@ export const options = {
   },
 };
 
+function randomString(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export default function () {
-  // เปลี่ยน URL เป็นของ Cloud Run Backend ของคุณ
-  const url = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api/health'; 
-  
+  const baseUrl = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api';
   const params = {
     headers: {
       'Content-Type': 'application/json',
-      // 'Authorization': 'Bearer YOUR_TOKEN', // ถ้าต้องใส่ Token
     },
   };
 
-  const res = http.get(url, params);
-
-  // เช็กว่าตอบกลับเป็น 200 OK ไหม
-  check(res, {
-    'status is 200': (r) => r.status === 200,
+  // 1. Verify Override Token
+  const verifyUrl = `${baseUrl}/guest/override/verify`;
+  const verifyPayload = JSON.stringify({
+    code: "1001",
+    reason: "จำเป็นต้องอนุญาตการเข้าถึงตำแหน่งก่อนใช้งาน",
+    pid: "jQJocFrLRF",
+    id: "UTT1cWu772MXhrnORl2kWGion8F3"
   });
 
-  sleep(1); // พัก 1 วินาทีระหว่างแต่ละ Request เพื่อไม่ให้ยิงรัวจนเกินไปในระดับ Network
+  const verifyRes = http.post(verifyUrl, verifyPayload, params);
+  check(verifyRes, {
+    'verify status is 200': (r) => r.status === 200,
+    'verify has token': (r) => r.json().token !== undefined,
+  });
+
+ 
+
+  if (verifyRes.status !== 200) {
+    console.error(`Verify failed: ${verifyRes.status} ${verifyRes.body}`);
+    return;
+  }
+
+  const token = verifyRes.json().token;
+
+  const guestKey = randomString(24);
+
+  // 2. Create Session
+  const sessionUrl = `${baseUrl}/guest/sessions`;
+  const sessionPayload = JSON.stringify({
+    pid: "jQJocFrLRF",
+    id: "UTT1cWu772MXhrnORl2kWGion8F3",
+    guestKey: guestKey,
+    overrideToken: token
+  });
+
+  const sessionRes = http.post(sessionUrl, sessionPayload, params);
+  check(sessionRes, {
+    'session status is 200': (r) => r.status === 200,
+    'session has sessionId': (r) => r.json().sessionId !== undefined,
+  });
+
+  if (sessionRes.status === 200) {
+    const sessionId = sessionRes.json().sessionId;
+    console.log(`[VU:${__VU}] Session created: ${sessionId}`);
+  } else {
+    console.error(`[VU:${__VU}] Session failed: ${sessionRes.status} ${sessionRes.body}`);
+    return;
+  }
+
+  sleep(2);
+
+  const sessionId = sessionRes.json().sessionId;
+
+  // 3. Send "Add to Cart" Event
+  const eventsUrl = `${baseUrl}/guest/events`;
+  const eventPayload = JSON.stringify({
+    type: "add_to_cart",
+    ts: Date.now(),
+    sessionId: sessionId,
+    tableName: "D",
+    contactName: "ppm",
+    tableId: "i5xADQxqYVXrGG19C20n",
+    branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
+    groupId: null,
+    businessDay: "20260331",
+    membersId: guestKey,
+    payload: {
+      menuId: "Nj8l8Smstya5aGnLDHKb",
+      menuName: { th: "ข้าวกะเพรา", en: "Thai Basil on Rice", ms: "Nasi Basil Thai" },
+      qty: 1,
+      total: 55,
+      currency: "THB",
+      builds: [
+        {
+          id: "dmq9uym",
+          tierKey: "M",
+          mods: {
+            "0225de19-d5f2-46d6-85e8-749839e32935": { "6a69dcee-8949-4800-aaea-f80b00d6ab12": { th: "เผ็ดน้อย", en: "Mild", ms: "Sederhana" } },
+            "c7b7da42-fc18-4465-b7b9-1fcf3120fce7": { "9f70a136-91fe-497e-9ab4-be273ee3e3c3": { th: "ไก่", en: "Chicken", ms: "Ayam" } }
+          },
+          each: 55
+        }
+      ],
+      kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+    }
+  });
+
+  const eventRes = http.post(eventsUrl, eventPayload, params);
+  check(eventRes, {
+    'event status is 200': (r) => r.status === 200,
+  });
+
+  if (eventRes.status === 200) {
+    console.log(`[VU:${__VU}] Event 'add_to_cart' sent for session: ${sessionId}`);
+  } else {
+    console.error(`[VU:${__VU}] Event failed: ${eventRes.status} ${eventRes.body}`);
+  }
+
+  sleep(2);
+
+  // 4. Send "Order" Event
+  const orderUrl = `${baseUrl}/guest/events/order`;
+  const orderPayload = JSON.stringify({
+    ts: Date.now(),
+    sessionId: sessionId,
+    currency: "THB",
+    itemsCount: 1,
+    subtotal: 55,
+    items: [
+      {
+        menuId: "Nj8l8Smstya5aGnLDHKb",
+        menuName: { th: "ข้าวกะเพรา", en: "Thai Basil on Rice", ms: "Nasi Basil Thai" },
+        qty: 1,
+        total: 55,
+        builds: [
+          {
+            id: "krwihrr",
+            tierKey: "M",
+            each: 55,
+            mods: {
+              "0225de19-d5f2-46d6-85e8-749839e32935": [{ th: "เผ็ดน้อย", en: "Mild", ms: "Sederhana" }],
+              "c7b7da42-fc18-4465-b7b9-1fcf3120fce7": [{ th: "ไก่", en: "Chicken", ms: "Ayam" }]
+            }
+          }
+        ],
+        kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+      }
+    ],
+    url: `https://warungpos-9e429.web.app/guest/cart/?pid=${sessionId}`,
+    ref: "",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+    contactName: "ddz",
+    tableName: "D",
+    tableId: "i5xADQxqYVXrGG19C20n",
+    branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
+    groupId: "",
+    businessDay: "20260331",
+    membersId: guestKey
+  });
+
+  const orderRes = http.post(orderUrl, orderPayload, params);
+  check(orderRes, {
+    'order status is 200': (r) => r.status === 200,
+  });
+
+  if (orderRes.status === 200) {
+    console.log(`[VU:${__VU}] Order placed successfully for session: ${sessionId}`);
+  } else {
+    console.error(`[VU:${__VU}] Order failed: ${orderRes.status} ${orderRes.body}`);
+  }
+
+  sleep(2);
 }
