@@ -3,7 +3,7 @@ name: Manual Load Test with k6
 on:
   workflow_dispatch: # ทำให้มีปุ่มกด Run workflow ในหน้าเว็บ GitHub
   schedule:
-    - cron: '0 */2 * * *' # รันอัตโนมัติทุกๆ 2 ชั่วโมง
+    - cron: '*/3 * * * *' # รันอัตโนมัติทุกๆ 3 นาที
 
 jobs:
   k6_load_test:
