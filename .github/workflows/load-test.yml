@@ -26,20 +26,21 @@ jobs:
         run: |
           echo "## 🚀 Load Test Results" >> $GITHUB_STEP_SUMMARY
           
-          # ตรวจสอบว่าไฟล์ result.json มีอยู่จริงก่อนประมวลผล
           if [ -f "result.json" ]; then
-            FAILED_RATE=$(jq '.metrics.http_req_failed.values.rate' result.json)
-            P95_LATENCY=$(jq '.metrics.http_req_duration.values."p(95)"' result.json)
-            TOTAL_ITERS=$(jq '.metrics.iterations.values.count' result.json)
+            # ดึงค่าแบบ Safe (รองรับทั้ง p(95) และ p95)
+            FAILED_RATE=$(jq -r '.metrics.http_req_failed.values.rate // 0' result.json)
+            P95_MS=$(jq -r '.metrics.http_req_duration.values["p(95)"] // 0' result.json)
+            TOTAL_ITERS=$(jq -r '.metrics.iterations.values.count // 0' result.json)
             
-            # คำนวณเป็น %
-            FAILED_PERCENT=$(echo "$FAILED_RATE * 100" | bc | awk '{printf "%.2f%%", $1}')
+            # คำนวณและจัดฟอร์แมตตัวเลขด้วย awk
+            FAILED_PERCENT=$(echo "$FAILED_RATE" | awk '{printf "%.2f", $1 * 100}')
+            P95_ROUND=$(echo "$P95_MS" | awk '{printf "%.2f", $1}')
             
-            echo "- **Requests Failed:** $FAILED_PERCENT" >> $GITHUB_STEP_SUMMARY
-            echo "- **P95 Latency:** $P95_LATENCY ms" >> $GITHUB_STEP_SUMMARY
+            echo "- **Requests Failed:** $FAILED_PERCENT%" >> $GITHUB_STEP_SUMMARY
+            echo "- **P95 Latency:** $P95_ROUND ms" >> $GITHUB_STEP_SUMMARY
             echo "- **Total Iterations:** $TOTAL_ITERS" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ Error: result.json not found. Test might have failed early." >> $GITHUB_STEP_SUMMARY
+            echo "❌ Error: result.json not found. Check k6 logs for details." >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
