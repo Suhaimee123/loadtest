@@ -15,7 +15,33 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run k6 test
-        uses: grafana/setup-k6-action@v1
+        id: k6test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: loadtest.js
+          flags: --summary-export=result.json
 
-      - name: Execute load test
-        run: k6 run loadtest.js
+      - name: Generate Summary
+        if: always()
+        run: |
+          echo "## 🚀 Load Test Results" >> $GITHUB_STEP_SUMMARY
+          
+          # ตรวจสอบว่าไฟล์ result.json มีอยู่จริงก่อนประมวลผล
+          if [ -f "result.json" ]; then
+            FAILED_RATE=$(jq '.metrics.http_req_failed.values.rate' result.json)
+            P95_LATENCY=$(jq '.metrics.http_req_duration.values."p(95)"' result.json)
+            TOTAL_ITERS=$(jq '.metrics.iterations.values.count' result.json)
+            
+            # คำนวณเป็น %
+            FAILED_PERCENT=$(echo "$FAILED_RATE * 100" | bc | awk '{printf "%.2f%%", $1}')
+            
+            echo "- **Requests Failed:** $FAILED_PERCENT" >> $GITHUB_STEP_SUMMARY
+            echo "- **P95 Latency:** $P95_LATENCY ms" >> $GITHUB_STEP_SUMMARY
+            echo "- **Total Iterations:** $TOTAL_ITERS" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Error: result.json not found. Test might have failed early." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Checks" >> $GITHUB_STEP_SUMMARY
+          echo "Refer to the Console Logs or JSON result for full details." >> $GITHUB_STEP_SUMMARY
