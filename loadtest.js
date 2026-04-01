@@ -55,6 +55,7 @@ export default function () {
   const token = verifyRes.json().token;
   const guestKey = randomString(24);
 
+
   sleep(2);
 
   // 2. Create Session
@@ -64,6 +65,7 @@ export default function () {
     id: adminId,
     guestKey: guestKey,
     overrideToken: token
+
   });
 
   const sessionRes = http.post(sessionUrl, sessionPayload, {
@@ -73,6 +75,8 @@ export default function () {
       'x-guest-override-token': token,
     }
   });
+
+  const businessDay = sessionRes.json().businessDay;
 
   check(sessionRes, {
     'session status is 200': (r) => r.status === 200,
@@ -110,7 +114,7 @@ export default function () {
     tableId: "i5xADQxqYVXrGG19C20n",
     branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
     groupId: null,
-    businessDay: "20260331",
+    businessDay: businessDay,
     membersId: guestKey,
     payload: {
       menuId: "Nj8l8Smstya5aGnLDHKb",
@@ -182,7 +186,7 @@ export default function () {
     tableId: "i5xADQxqYVXrGG19C20n",
     branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
     groupId: "",
-    businessDay: "20260331",
+    businessDay: businessDay,
     membersId: guestKey
   });
 
@@ -201,12 +205,13 @@ export default function () {
 }
 
 export function handleSummary(data) {
-  const passes = data.metrics.checks.values.passes;
-  const fails = data.metrics.checks.values.fails;
-  const errorRate = (data.metrics.http_req_failed.values.rate * 100).toFixed(2);
-  const p95 = data.metrics.http_req_duration.values['p(95)'].toFixed(2);
-  const avg = data.metrics.http_req_duration.values.avg.toFixed(2);
-  const max = data.metrics.http_req_duration.values.max.toFixed(2);
+  const passes = (data.metrics.checks && data.metrics.checks.values) ? data.metrics.checks.values.passes : 0;
+  const fails = (data.metrics.checks && data.metrics.checks.values) ? data.metrics.checks.values.fails : 0;
+  const errorRate = (data.metrics.http_req_failed && data.metrics.http_req_failed.values) ? (data.metrics.http_req_failed.values.rate * 100).toFixed(2) : '0.00';
+  const p95 = (data.metrics.http_req_duration && data.metrics.http_req_duration.values) ? data.metrics.http_req_duration.values['p(95)'].toFixed(2) : '0.00';
+  const avg = (data.metrics.http_req_duration && data.metrics.http_req_duration.values) ? data.metrics.http_req_duration.values.avg.toFixed(2) : '0.00';
+  const max = (data.metrics.http_req_duration && data.metrics.http_req_duration.values) ? data.metrics.http_req_duration.values.max.toFixed(2) : '0.00';
+  const iterations = (data.metrics.iterations && data.metrics.iterations.values) ? data.metrics.iterations.values.count : 0;
 
   // QuickChart Pie Chart (Checks)
   const pieChart = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify({
@@ -242,7 +247,7 @@ export function handleSummary(data) {
 | :--- | :--- |
 | **Requests Failed** | ${errorRate}% |
 | **P95 Latency** | ${p95} ms |
-| **Total Iterations** | ${data.metrics.iterations.values.count} |
+| **Total Iterations** | ${iterations} |
 
 ### 📊 Performance Charts
 ![Check Results](${pieChart})
