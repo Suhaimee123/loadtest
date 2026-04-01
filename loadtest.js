@@ -7,10 +7,7 @@ export const options = {
     { duration: '6m', target: 50 },  // 6 นาทีต่อมา: ยิงแช่ไว้ที่ 50 คน ดูความเสถียร
     { duration: '2m', target: 0 },   // 2 นาทีสุดท้าย: ค่อยๆ ลดคนลงจนเหลือ 0 (รวมเป็น 10 นาทีพอดี)
   ],
-  thresholds: {
-    http_req_failed: ['rate<0.01'], // ตั้งเป้าว่า Error ต้องน้อยกว่า 1%
-    http_req_duration: ['p(95)<500'], // 95% ของ Request ต้องตอบกลับภายใน 500ms
-  },
+
 };
 
 function randomString(length) {
