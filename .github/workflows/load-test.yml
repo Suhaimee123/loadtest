@@ -31,3 +31,14 @@ jobs:
             echo "## ❌ Error: summary.md not found" >> $GITHUB_STEP_SUMMARY
             echo "Check k6 console logs for errors." >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Log to Google Sheets
+        if: always()
+        run: |
+          if [ -f "summary.json" ]; then
+            curl -X POST -L "https://script.google.com/macros/s/AKfycbzg5DuvpiEbvfVBvwB7G91Nn0L_7tvLnOa4pTA4hfgui3YtC5GencRefWY_AwXHxOpD/exec" \
+            -H "Content-Type: application/json" \
+            -d @summary.json
+          else
+            echo "summary.json not found, skipping Google Sheets log."
+          fi

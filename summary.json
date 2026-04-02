@@ -1,0 +1,1 @@
+{"summary":{"iterations":100,"errorRate":"3.40"},"details":[{"name":"1. Verify Override Token","avg":"1728.05","p95":"4586.22","fails":0},{"name":"2. Create Session","avg":"3345.88","p95":"4597.48","fails":0},{"name":"3. Add to Cart","avg":"1523.84","p95":"1952.95","fails":0},{"name":"4. Place Order","avg":"1605.35","p95":"2153.95","fails":0}]}

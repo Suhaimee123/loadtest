@@ -1,13 +1,18 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check, sleep, group } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '2m', target: 50 },  // 2 นาทีแรก: ค่อยๆ เพิ่มคนเป็น 50 คน
-    { duration: '6m', target: 50 },  // 6 นาทีต่อมา: ยิงแช่ไว้ที่ 50 คน ดูความเสถียร
-    { duration: '2m', target: 0 },   // 2 นาทีสุดท้าย: ค่อยๆ ลดคนลงจนเหลือ 0 (รวมเป็น 10 นาทีพอดี)
+    { duration: '10s', target: 20 }, // ปรับเพิ่มเป็น 20 คนได้เลยครับ เพราะ PID เยอะแล้ว
+    { duration: '40s', target: 20 },
+    { duration: '10s', target: 0 },
   ],
-
+  thresholds: {
+    'http_req_duration{name:1. Verify Override Token}': [],
+    'http_req_duration{name:2. Create Session}': [],
+    'http_req_duration{name:3. Add to Cart}': [],
+    'http_req_duration{name:4. Place Order}': [],
+  }
 };
 
 function randomString(length) {
@@ -19,243 +24,150 @@ function randomString(length) {
   return result;
 }
 
+// รายชื่อ PID ชุดใหม่ที่คุณส่งมา (ประมาณ 77 ตัว)
+const pids = [
+  "2NIECs_wmu", "2hsB6LzZcG", "331z4UHsXE", "3Oloo9x5H2", "4Jd_keZWC8", "4tIyhsmiQb", "5P3lwe2Z2v", "6RXPHRgWJD",
+  "6mhno4Bk1N", "7LCMxw7n5s", "8YiVE1lPir", "9u6M_n0hWN", "AP51c05fo4", "BKx4JTUHwi", "CUlzjfRXmf", "D2H6h7HjrZ",
+  "DUgjqkBT8r", "DbVmM0ekZj", "EHXQiMDpzq", "FBs9J5fKIu", "Fljv9AFgat", "GWN7d6AJrn", "GmR8FwuNq_", "H0BfIJ-ehA",
+  "HnWR8CrXqn", "ICXzAhQtWK", "IcqiPBdgTm", "JdvSU1PuPT", "K6W7rIReUH", "KDYnJyDp5P", "KWfAvxviXA", "Kj4u9fxYjG",
+  "MPwZb1nZlc", "MwRmWFjnOS", "OGE0eaLS7M", "PIkk_dBYjX", "PZqcglyPWG", "PlFC27I6Xx", "QBP-3QjVBI", "QKIf4jGZK5",
+  "R-q0SbJTme", "SOxJTj3MG_", "UbuqIML9ay", "VWjWx3FA6q", "WgkGbvkLAI", "XZhVpgd7qo", "ZHJnWBgr8u", "ZqUz_FWU0K",
+  "_SNTMhpStM", "_kSDJ43zFL", "aZRn16uVS9", "cgK_VXzgdE", "d3MyZ-vEKR", "gz0aiSdGXw", "hExGyxzpbv", "itXwOy1lid",
+  "jIHhdlgUkR", "jcEHlwH2kb", "jrKSpEWTlo", "kFQGpO66cG", "lSb6IAeZDq", "m7IsaKbaeC", "naIS6bkHBg", "pJyVbYkFJK",
+  "qB2DgKtanB", "qR3GOVG7OC", "sAQD8WnGLm", "tTEAFRO662", "uOibSZJg2t", "vCbpzxkMn5", "vnYvk8Rqdm", "wM7WHjw7Zp",
+  "wPzXINeyxh", "_VOUubM0b", "x66wQ_K24c", "z5hjD6ud9n"
+];
+
 export default function () {
   const baseUrl = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api';
   const adminId = "UTT1cWu772MXhrnORl2kWGion8F3";
-
-  // 1. Verify Override Token
-  const verifyUrl = `${baseUrl}/guest/override/verify`;
-  const verifyPayload = JSON.stringify({
-    code: "1001",
-    reason: "จำเป็นต้องอนุญาตการเข้าถึงตำแหน่งก่อนใช้งาน",
-    pid: "jQJocFrLRF",
-    id: adminId
-  });
-
-  const verifyRes = http.post(verifyUrl, verifyPayload, {
-    headers: {
-      'Content-Type': 'application/json',
-      'x-guest-admin-id': adminId,
-    }
-  });
-
-  check(verifyRes, {
-    'verify status is 200': (r) => r.status === 200,
-    'verify has token': (r) => r.json().token !== undefined,
-  });
-
-  if (verifyRes.status !== 200) {
-    console.error(`Verify failed: ${verifyRes.status} ${verifyRes.body}`);
-    return;
-  }
-
-  const token = verifyRes.json().token;
-  const guestKey = randomString(24);
-
-
-  sleep(2);
-
-  // 2. Create Session
-  const sessionUrl = `${baseUrl}/guest/sessions`;
-  const sessionPayload = JSON.stringify({
-    pid: "jQJocFrLRF",
-    id: adminId,
-    guestKey: guestKey,
-    overrideToken: token
-
-  });
-
-  const sessionRes = http.post(sessionUrl, sessionPayload, {
-    headers: {
-      'Content-Type': 'application/json',
-      'x-guest-admin-id': adminId,
-      'x-guest-override-token': token,
-    }
-  });
-
-  const businessDay = sessionRes.json().businessDay;
-
-  check(sessionRes, {
-    'session status is 200': (r) => r.status === 200,
-    'session has sessionId': (r) => r.json().sessionId !== undefined,
-  });
-
-  if (sessionRes.status === 200) {
-    const sessionId = sessionRes.json().sessionId;
-    console.log(`[VU:${__VU}] Session created: ${sessionId}`);
-  } else {
-    console.error(`[VU:${__VU}] Session failed: ${sessionRes.status} ${sessionRes.body}`);
-    return;
-  }
-
-  sleep(2);
-
-  const sessionId = sessionRes.json().sessionId;
   
-  // Common headers for subsequent events/orders
-  const commonHeaders = {
+  // เลือก PID แบบไม่ให้ซ้ำกันในแต่ละรอบและแต่ละคน (Unique per iteration)
+  const pidIndex = (__VU - 1 + (__ITER * 20)) % pids.length; 
+  const pid = pids[pidIndex];
+  
+  const vuId = __VU;
+  const iterId = __ITER;
+  const guestKey = randomString(24);
+  const contactName = `T-${vuId}-${iterId}`;
+
+  let token = '';
+  let sessionId = '';
+  let businessDay = '';
+
+  // 1. Verify
+  let v1_success = false;
+  group('Step 1: Verify', function () {
+    const res = http.post(`${baseUrl}/guest/override/verify`, JSON.stringify({
+      code: "1001", pid: pid, id: adminId, reason: "Load Test"
+    }), {
+      headers: { 'Content-Type': 'application/json', 'x-guest-admin-id': adminId },
+      tags: { name: '1. Verify Override Token' }
+    });
+    v1_success = check(res, { 'v1_ok': (r) => r.status === 200 });
+    if (v1_success) token = res.json().token;
+  });
+  if (!v1_success) { sleep(1); return; }
+  
+  sleep(1); // รอ 1 วินาที ให้ระบบรับทราบ Token
+
+  // 2. Session
+  let v2_success = false;
+  group('Step 2: Session', function () {
+    const res = http.post(`${baseUrl}/guest/sessions`, JSON.stringify({
+      pid: pid, id: adminId, guestKey: guestKey, overrideToken: token
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-guest-admin-id': adminId,
+        'x-guest-override-token': token,
+      },
+      tags: { name: '2. Create Session' }
+    });
+    v2_success = check(res, { 'v2_ok': (r) => r.status === 200 });
+    if (v2_success) {
+      const data = res.json();
+      sessionId = data.sessionId;
+      businessDay = data.businessDay;
+    }
+  });
+  if (!v2_success) { sleep(1); return; }
+
+  const headers = {
     'Content-Type': 'application/json',
     'x-guest-admin-id': adminId,
     'x-guest-override-token': token,
     'x-guest-session-id': sessionId,
   };
 
-  // 3. Send "Add to Cart" Event
-  const eventsUrl = `${baseUrl}/guest/events`;
-  const eventPayload = JSON.stringify({
-    type: "add_to_cart",
-    ts: Date.now(),
-    sessionId: sessionId,
-    tableName: "D",
-    contactName: "ppm",
-    tableId: "i5xADQxqYVXrGG19C20n",
-    branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
-    groupId: null,
-    businessDay: businessDay,
-    membersId: guestKey,
-    payload: {
-      menuId: "Nj8l8Smstya5aGnLDHKb",
-      menuName: { th: "ข้าวกะเพรา", en: "Thai Basil on Rice", ms: "Nasi Basil Thai" },
-      qty: 1,
-      total: 55,
-      currency: "THB",
-      builds: [
-        {
-          id: "dmq9uym",
-          tierKey: "M",
-          mods: {
-            "0225de19-d5f2-46d6-85e8-749839e32935": { "6a69dcee-8949-4800-aaea-f80b00d6ab12": { th: "เผ็ดน้อย", en: "Mild", ms: "Sederhana" } },
-            "c7b7da42-fc18-4465-b7b9-1fcf3120fce7": { "9f70a136-91fe-497e-9ab4-be273ee3e3c3": { th: "ไก่", en: "Chicken", ms: "Ayam" } }
-          },
-          each: 55
-        }
-      ],
-      kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+  sleep(1.5); // รอให้ Session พร้อมใช้งานใน DB
+
+  // 3. Add to Cart
+  let v3_success = false;
+  group('Step 3: Add to Cart', function () {
+    const res = http.post(`${baseUrl}/guest/events`, JSON.stringify({
+      type: "add_to_cart", ts: Date.now(), sessionId: sessionId,
+      tableName: `T-${vuId}`, contactName: contactName,
+      tableId: "i5xADQxqYVXrGG19C20n", branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
+      businessDay: businessDay, membersId: guestKey,
+      payload: {
+        menuId: "Nj8l8Smstya5aGnLDHKb", 
+        menuName: { th: "กะเพรา" }, qty: 1, total: 55, currency: "THB",
+        builds: [{ id: randomString(7), tierKey: "M", mods: {}, each: 55 }],
+        kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+      }
+    }), { headers: headers, tags: { name: '3. Add to Cart' } });
+
+    v3_success = check(res, { 'v3_ok': (r) => r.status === 200 });
+    if (!v3_success) console.error(`[VU:${vuId}] Step 3 Fail: ${res.status} ${res.body}`);
+  });
+  if (!v3_success) { sleep(1); return; }
+
+  sleep(2); // สำคัญมาก: รอให้ Firestore Sync ของลงตะกร้าให้เสร็จก่อนสั่งซื้อ
+
+  // 4. Order
+  let v4_success = false;
+  group('Step 4: Order', function () {
+    const res = http.post(`${baseUrl}/guest/events/order`, JSON.stringify({
+      ts: Date.now(), sessionId: sessionId, currency: "THB", itemsCount: 1, subtotal: 55,
+      items: [{
+        menuId: "Nj8l8Smstya5aGnLDHKb", menuName: { th: "กะเพรา" }, qty: 1, total: 55,
+        builds: [{ id: randomString(7), tierKey: "M", each: 55, mods: {} }],
+        kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+      }],
+      url: `https://warungpos.app/cart?pid=${sessionId}`,
+      contactName: contactName, tableName: `T-${vuId}`,
+      tableId: "i5xADQxqYVXrGG19C20n", branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
+      businessDay: businessDay, membersId: guestKey
+    }), { headers: headers, tags: { name: '4. Place Order' } });
+
+    v4_success = check(res, { 'v4_ok': (r) => r.status === 200 });
+    if (v4_success) {
+      console.log(`[VU:${vuId}] Success Cycle -> PID: ${pid}`);
+    } else {
+      console.error(`[VU:${vuId}] Step 4 FAILED -> PID: ${pid} Reason: ${res.body}`);
     }
   });
 
-  const eventRes = http.post(eventsUrl, eventPayload, { headers: commonHeaders });
-  check(eventRes, {
-    'event status is 200': (r) => r.status === 200,
-  });
-
-  if (eventRes.status === 200) {
-    console.log(`[VU:${__VU}] Event 'add_to_cart' sent for session: ${sessionId}`);
-  } else {
-    console.error(`[VU:${__VU}] Event failed: ${eventRes.status} ${eventRes.body}`);
-  }
-
-  sleep(2);
-
-  // 4. Send "Order" Event
-  const orderUrl = `${baseUrl}/guest/events/order`;
-  const orderPayload = JSON.stringify({
-    ts: Date.now(),
-    sessionId: sessionId,
-    currency: "THB",
-    itemsCount: 1,
-    subtotal: 55,
-    items: [
-      {
-        menuId: "Nj8l8Smstya5aGnLDHKb",
-        menuName: { th: "ข้าวกะเพรา", en: "Thai Basil on Rice", ms: "Nasi Basil Thai" },
-        qty: 1,
-        total: 55,
-        builds: [
-          {
-            id: "krwihrr",
-            tierKey: "M",
-            each: 55,
-            mods: {
-              "0225de19-d5f2-46d6-85e8-749839e32935": [{ th: "เผ็ดน้อย", en: "Mild", ms: "Sederhana" }],
-              "c7b7da42-fc18-4465-b7b9-1fcf3120fce7": [{ th: "ไก่", en: "Chicken", ms: "Ayam" }]
-            }
-          }
-        ],
-        kitchenStation: "4VimoAU6yEYqIrt9wl3N"
-      }
-    ],
-    url: `https://warungpos-9e429.web.app/guest/cart/?pid=${sessionId}`,
-    ref: "",
-    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    contactName: "ddz",
-    tableName: "D",
-    tableId: "i5xADQxqYVXrGG19C20n",
-    branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
-    groupId: "",
-    businessDay: businessDay,
-    membersId: guestKey
-  });
-
-  const orderRes = http.post(orderUrl, orderPayload, { headers: commonHeaders });
-  check(orderRes, {
-    'order status is 200': (r) => r.status === 200,
-  });
-
-  if (orderRes.status === 200) {
-    console.log(`[VU:${__VU}] Order placed successfully for session: ${sessionId}`);
-  } else {
-    console.error(`[VU:${__VU}] Order failed: ${orderRes.status} <REDACTED>`);
-  }
-
-  sleep(2);
+  sleep(3); // จบรอบแล้วพักก่อนเริ่มใหม่
 }
 
 export function handleSummary(data) {
-  const passes = (data.metrics.checks && data.metrics.checks.values) ? data.metrics.checks.values.passes : 0;
-  const fails = (data.metrics.checks && data.metrics.checks.values) ? data.metrics.checks.values.fails : 0;
-  const errorRate = (data.metrics.http_req_failed && data.metrics.http_req_failed.values) ? (data.metrics.http_req_failed.values.rate * 100).toFixed(2) : '0.00';
-  const p95 = (data.metrics.http_req_duration && data.metrics.http_req_duration.values) ? data.metrics.http_req_duration.values['p(95)'].toFixed(2) : '0.00';
-  const avg = (data.metrics.http_req_duration && data.metrics.http_req_duration.values) ? data.metrics.http_req_duration.values.avg.toFixed(2) : '0.00';
-  const max = (data.metrics.http_req_duration && data.metrics.http_req_duration.values) ? data.metrics.http_req_duration.values.max.toFixed(2) : '0.00';
-  const iterations = (data.metrics.iterations && data.metrics.iterations.values) ? data.metrics.iterations.values.count : 0;
+  const metrics = data.metrics;
+  const iterations = metrics.iterations ? metrics.iterations.values.count : 0;
+  const errorRate = metrics.http_req_failed ? (metrics.http_req_failed.values.rate * 100).toFixed(2) : '0';
 
-  // QuickChart Pie Chart (Checks)
-  const pieChart = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify({
-    type: 'pie',
-    data: {
-      labels: ['Pass', 'Fail'],
-      datasets: [{
-        data: [passes, fails],
-        backgroundColor: ['#28a745', '#dc3545']
-      }]
-    },
-    options: { title: { display: true, text: 'Check Results (Pass vs Fail)' } }
-  }))}`;
+  const getStat = (tag) => {
+    const dur = metrics[`http_req_duration{name:${tag}}`];
+    const fail = metrics[`http_req_failed{name:${tag}}`];
+    return dur ? { name: tag, avg: dur.values.avg.toFixed(2), p95: dur.values['p(95)'].toFixed(2), fails: fail ? fail.values.passes : 0 } : null;
+  };
 
-  // QuickChart Bar Chart (Latency Profile)
-  const barChart = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify({
-    type: 'bar',
-    data: {
-      labels: ['Avg', 'p(95)', 'Max'],
-      datasets: [{
-        label: 'Latency (ms)',
-        data: [avg, p95, max],
-        backgroundColor: ['#4bc0c0', '#ffcd56', '#ff6384']
-      }]
-    },
-    options: { title: { display: true, text: 'Latency Performance (ms)' } }
-  }))}`;
+  const details = [getStat('1. Verify Override Token'), getStat('2. Create Session'), getStat('3. Add to Cart'), getStat('4. Place Order')].filter(s => s !== null);
 
   return {
-    'summary.md': `## 🚀 Load Test Results
-
-| Metrics | Value |
-| :--- | :--- |
-| **Requests Failed** | ${errorRate}% |
-| **P95 Latency** | ${p95} ms |
-| **Total Iterations** | ${iterations} |
-
-### 📊 Performance Charts
-![Check Results](${pieChart})
-![Latency Profile](${barChart})
-
-### ✅ Check Details
-- **Succeeded:** ${passes}
-- **Failed:** ${fails}
-
----
-*Generated by WarungPOS Load Test System*
-`,
+    'summary.json': JSON.stringify({ summary: { iterations, errorRate }, details }),
+    'stdout': `\n🚀 Summary (PID Count: ${pids.length}, VUs: 20)\n----------------------------------------\n` + 
+              details.map(d => `${d.name.padEnd(25)}: Avg=${d.avg.padStart(6)}ms, Fails=${d.fails}`).join('\n') + `\n`
   };
 }
