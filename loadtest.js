@@ -1,9 +1,13 @@
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
+import { Counter } from 'k6/metrics';
+
+// ตัวนับสำหรับ Error 503 โดยเฉพาะ เพื่อวิเคราะห์ความเสถียรของ Server
+const status503Counter = new Counter('http_req_status_503');
 
 export const options = {
   stages: [
-    { duration: '10s', target: 20 }, // ปรับเพิ่มเป็น 20 คนได้เลยครับ เพราะ PID เยอะแล้ว
+    { duration: '10s', target: 20 },
     { duration: '40s', target: 20 },
     { duration: '10s', target: 0 },
   ],
@@ -24,7 +28,6 @@ function randomString(length) {
   return result;
 }
 
-// รายชื่อ PID ชุดใหม่ที่คุณส่งมา (ประมาณ 77 ตัว)
 const pids = [
   "2NIECs_wmu", "2hsB6LzZcG", "331z4UHsXE", "3Oloo9x5H2", "4Jd_keZWC8", "4tIyhsmiQb", "5P3lwe2Z2v", "6RXPHRgWJD",
   "6mhno4Bk1N", "7LCMxw7n5s", "8YiVE1lPir", "9u6M_n0hWN", "AP51c05fo4", "BKx4JTUHwi", "CUlzjfRXmf", "D2H6h7HjrZ",
@@ -38,11 +41,14 @@ const pids = [
   "wPzXINeyxh", "_VOUubM0b", "x66wQ_K24c", "z5hjD6ud9n"
 ];
 
+function trackStatus(res) {
+  if (res.status === 503) status503Counter.add(1);
+}
+
 export default function () {
   const baseUrl = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api';
   const adminId = "UTT1cWu772MXhrnORl2kWGion8F3";
   
-  // เลือก PID แบบไม่ให้ซ้ำกันในแต่ละรอบและแต่ละคน (Unique per iteration)
   const pidIndex = (__VU - 1 + (__ITER * 20)) % pids.length; 
   const pid = pids[pidIndex];
   
@@ -64,12 +70,13 @@ export default function () {
       headers: { 'Content-Type': 'application/json', 'x-guest-admin-id': adminId },
       tags: { name: '1. Verify Override Token' }
     });
+    trackStatus(res);
     v1_success = check(res, { 'v1_ok': (r) => r.status === 200 });
     if (v1_success) token = res.json().token;
   });
   if (!v1_success) { sleep(1); return; }
   
-  sleep(1); // รอ 1 วินาที ให้ระบบรับทราบ Token
+  sleep(1); 
 
   // 2. Session
   let v2_success = false;
@@ -84,6 +91,7 @@ export default function () {
       },
       tags: { name: '2. Create Session' }
     });
+    trackStatus(res);
     v2_success = check(res, { 'v2_ok': (r) => r.status === 200 });
     if (v2_success) {
       const data = res.json();
@@ -100,7 +108,7 @@ export default function () {
     'x-guest-session-id': sessionId,
   };
 
-  sleep(1.5); // รอให้ Session พร้อมใช้งานใน DB
+  sleep(1.5); 
 
   // 3. Add to Cart
   let v3_success = false;
@@ -118,12 +126,13 @@ export default function () {
       }
     }), { headers: headers, tags: { name: '3. Add to Cart' } });
 
+    trackStatus(res);
     v3_success = check(res, { 'v3_ok': (r) => r.status === 200 });
     if (!v3_success) console.error(`[VU:${vuId}] Step 3 Fail: ${res.status} ${res.body}`);
   });
   if (!v3_success) { sleep(1); return; }
 
-  sleep(2); // สำคัญมาก: รอให้ Firestore Sync ของลงตะกร้าให้เสร็จก่อนสั่งซื้อ
+  sleep(2); 
 
   // 4. Order
   let v4_success = false;
@@ -141,33 +150,75 @@ export default function () {
       businessDay: businessDay, membersId: guestKey
     }), { headers: headers, tags: { name: '4. Place Order' } });
 
+    trackStatus(res);
     v4_success = check(res, { 'v4_ok': (r) => r.status === 200 });
     if (v4_success) {
       console.log(`[VU:${vuId}] Success Cycle -> PID: ${pid}`);
     } else {
-      console.error(`[VU:${vuId}] Step 4 FAILED -> PID: ${pid} Reason: ${res.body}`);
+      console.error(`[VU:${vuId}] Step 4 FAILED -> PID: ${pid} Status: ${res.status} Reason: ${res.body}`);
     }
   });
 
-  sleep(3); // จบรอบแล้วพักก่อนเริ่มใหม่
+  sleep(3);
 }
 
 export function handleSummary(data) {
   const metrics = data.metrics;
   const iterations = metrics.iterations ? metrics.iterations.values.count : 0;
-  const errorRate = metrics.http_req_failed ? (metrics.http_req_failed.values.rate * 100).toFixed(2) : '0';
+  const errorRateTotal = metrics.http_req_failed ? (metrics.http_req_failed.values.rate * 100).toFixed(2) : '0';
+  const avgTotal = metrics.http_req_duration ? metrics.http_req_duration.values.avg.toFixed(2) : '0';
+  const p95Total = metrics.http_req_duration ? metrics.http_req_duration.values['p(95)'].toFixed(2) : '0';
+  const passes = metrics.checks ? metrics.checks.values.passes : 0;
+  const failsTotal = metrics.http_req_failed ? metrics.http_req_failed.values.passes : 0;
+  const s503Count = metrics.http_req_status_503 ? metrics.http_req_status_503.values.count : 0;
 
   const getStat = (tag) => {
     const dur = metrics[`http_req_duration{name:${tag}}`];
     const fail = metrics[`http_req_failed{name:${tag}}`];
-    return dur ? { name: tag, avg: dur.values.avg.toFixed(2), p95: dur.values['p(95)'].toFixed(2), fails: fail ? fail.values.passes : 0 } : null;
+    if (!dur) return null;
+    
+    return {
+      name: tag,
+      avg: dur.values.avg.toFixed(2),
+      p95: dur.values['p(95)'].toFixed(2),
+      min: dur.values.min.toFixed(2),
+      max: dur.values.max.toFixed(2),
+      med: dur.values.med.toFixed(2),
+      fails: fail ? fail.values.passes : 0,
+      errorRate: fail ? (fail.values.rate * 100).toFixed(2) : '0'
+    };
   };
 
-  const details = [getStat('1. Verify Override Token'), getStat('2. Create Session'), getStat('3. Add to Cart'), getStat('4. Place Order')].filter(s => s !== null);
+  const details = [
+    getStat('1. Verify Override Token'),
+    getStat('2. Create Session'),
+    getStat('3. Add to Cart'),
+    getStat('4. Place Order')
+  ].filter(s => s !== null);
+
+  const summaryData = {
+    summary: { 
+      iterations, 
+      passes, 
+      fails: failsTotal,
+      errorRate: errorRateTotal, 
+      avg: avgTotal, 
+      p95: p95Total,
+      s503: s503Count
+    },
+    details: details
+  };
 
   return {
-    'summary.json': JSON.stringify({ summary: { iterations, errorRate }, details }),
-    'stdout': `\n🚀 Summary (PID Count: ${pids.length}, VUs: 20)\n----------------------------------------\n` + 
-              details.map(d => `${d.name.padEnd(25)}: Avg=${d.avg.padStart(6)}ms, Fails=${d.fails}`).join('\n') + `\n`
+    'summary.json': JSON.stringify(summaryData),
+    'stdout': `\n🚀 Detailed Load Test Summary (VUs: 20, 503s: ${s503Count})\n` +
+              `--------------------------------------------------------------------------------\n` +
+              `Endpoint                   | Avg(ms) | P95(ms) | Min(ms) | Max(ms) | Fails | Error%\n` +
+              `--------------------------------------------------------------------------------\n` +
+              details.map(d => 
+                `${d.name.padEnd(26)} | ${d.avg.padStart(7)} | ${d.p95.padStart(7)} | ${d.min.padStart(7)} | ${d.max.padStart(7)} | ${String(d.fails).padStart(5)} | ${d.errorRate}%`
+              ).join('\n') + 
+              `\n--------------------------------------------------------------------------------\n` +
+              `OVERALL                    | ${avgTotal.padStart(7)} | ${p95Total.padStart(7)} | Total Iters: ${iterations} | Total Fails: ${failsTotal}\n`
   };
 }
