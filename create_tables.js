@@ -2,44 +2,59 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 export const options = {
-  iterations: 50,
+  iterations: 100, // รันให้ครบ 100 โต๊ะ
   vus: 1,
 };
 
 export default function () {
-  const url = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api/tables';
+  const createUrl = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api/tables';
+  const qrUrl = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api/publicTables/printQR';
   
-  const token = ""
+  // ใช้ Token ล่าสุดที่คุณส่งมา
+  const token = '';
 
   const i = __ITER + 1;
-  const payload = JSON.stringify({
-    nameTH: `${i}`,
-    code: `${i}`,
-    zone: "Zone",
-    capacity: 23,
+  const tableName = `TEST${i}`; 
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
+  };
+
+  // --- Step 1: Create Table ---
+  const createPayload = JSON.stringify({
+    nameTH: tableName,
+    code: tableName,
+    zone: "Auto-Created",
+    capacity: 9,
     isActive: true
   });
 
-  const params = {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-  };
+  const createRes = http.post(createUrl, createPayload, { headers });
 
-  console.log(`[Iter:${i}] Creating Table: สุ่ม-${i}...`);
-  
-  const res = http.post(url, payload, params);
-
-  check(res, {
-    'status is 200 or 201': (r) => r.status === 200 || r.status === 201,
-  });
-
-  if (res.status !== 200 && res.status !== 201) {
-    console.error(`[Iter:${i}] Failed: ${res.status} ${res.body}`);
-  } else {
-    console.log(`[Iter:${i}] Success!`);
+  if (createRes.status !== 200 && createRes.status !== 201) {
+    console.error(`[Iter:${i}] Failed to create table: ${createRes.status} ${createRes.body}`);
+    return;
   }
 
-  sleep(1);
+  const tableId = createRes.json().data.id;
+  sleep(0.2); 
+
+  // --- Step 2: Print QR ---
+  const qrPayload = JSON.stringify({
+    tableId: tableId,
+    addressId: null
+  });
+
+  const qrRes = http.post(qrUrl, qrPayload, { headers });
+
+  if (qrRes.status === 200) {
+    const pid = qrRes.json().pid;
+    // รูปแบบการ Log พิเศษเพื่อให้ AI สกัดง่ายๆ
+    console.log(`[RESULT_PID]: ${pid}`);
+  } else {
+    console.error(`[Iter:${i}] Failed to print QR für ID: ${tableId}`);
+  }
+
+  sleep(0.5); 
 }

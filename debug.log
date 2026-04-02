@@ -1,0 +1,38 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: create_tables.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 10m30s max duration (incl. graceful stop):
+              * default: 1 iterations shared among 1 VUs (maxDuration: 10m0s, gracefulStop: 30s)
+
+time="2026-04-03T01:00:35+07:00" level=error msg="[Iter:1] Failed to create table: 401 {\"success\":false,\"error\":\"โทเคนไม่ถูกต้องหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่\",\"detail\":\"Firebase ID token has expired. Get a fresh ID token from your client app and try again (auth/id-token-expired). See https://firebase.google.com/docs/auth/admin/verify-id-tokens for details on how to retrieve an ID token.\"}" source=console
+
+
+  █ TOTAL RESULTS 
+
+    HTTP
+    http_req_duration....: avg=293.98ms min=293.98ms med=293.98ms max=293.98ms p(90)=293.98ms p(95)=293.98ms
+    http_req_failed......: 100.00% 1 out of 1
+    http_reqs............: 1       2.445586/s
+
+    EXECUTION
+    iteration_duration...: avg=408.17ms min=408.17ms med=408.17ms max=408.17ms p(90)=408.17ms p(95)=408.17ms
+    iterations...........: 1       2.445586/s
+
+    NETWORK
+    data_received........: 14 kB   35 kB/s
+    data_sent............: 3.0 kB  7.2 kB/s
+
+
+
+
+running (00m00.4s), 0/1 VUs, 1 complete and 0 interrupted iterations
+default ✓ [ 100% ] 1 VUs  00m00.4s/10m0s  1/1 shared iters
