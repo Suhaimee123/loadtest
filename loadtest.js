@@ -7,9 +7,9 @@ const status503Counter = new Counter('http_req_status_503');
 
 export const options = {
   stages: [
-    { duration: '10s', target: 20 },
-    { duration: '40s', target: 20 },
-    { duration: '10s', target: 0 },
+    { duration: '30s', target: 50 },
+    { duration: '10m', target: 50 },
+    { duration: '30s', target: 0 },
   ],
   thresholds: {
     'http_req_duration{name:1. Verify Override Token}': [],
@@ -49,7 +49,7 @@ export default function () {
   const baseUrl = 'https://us-central1-warungpos-9e429.cloudfunctions.net/api';
   const adminId = "UTT1cWu772MXhrnORl2kWGion8F3";
   
-  const pidIndex = (__VU - 1 + (__ITER * 20)) % pids.length; 
+  const pidIndex = (__VU - 1 + (__ITER * 50)) % pids.length; 
   const pid = pids[pidIndex];
   
   const vuId = __VU;
@@ -211,7 +211,7 @@ export function handleSummary(data) {
 
   return {
     'summary.json': JSON.stringify(summaryData),
-    'stdout': `\n🚀 Detailed Load Test Summary (VUs: 20, 503s: ${s503Count})\n` +
+    'stdout': `\n🚀 Detailed Load Test Summary (VUs: 50, 503s: ${s503Count}, Time: 10m)\n` +
               `--------------------------------------------------------------------------------\n` +
               `Endpoint                   | Avg(ms) | P95(ms) | Min(ms) | Max(ms) | Fails | Error%\n` +
               `--------------------------------------------------------------------------------\n` +
