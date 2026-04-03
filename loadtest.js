@@ -77,9 +77,9 @@ export default function () {
     v1_success = check(res, { 'v1_ok': (r) => r.status === 200 });
     if (v1_success) token = res.json().token;
   });
-  if (!v1_success) { sleep(1); return; }
+  if (!v1_success) { sleep(0.1); return; }
   
-  sleep(1); 
+  sleep(0.1); 
 
   // 2. Session
   let v2_success = false;
@@ -102,7 +102,7 @@ export default function () {
       businessDay = data.businessDay;
     }
   });
-  if (!v2_success) { sleep(1); return; }
+  if (!v2_success) { sleep(0.4); return; }
 
   const headers = {
     'Content-Type': 'application/json',
@@ -111,7 +111,7 @@ export default function () {
     'x-guest-session-id': sessionId,
   };
 
-  sleep(1.5); 
+  sleep(0.5); 
 
   // 3. Add to Cart
   let v3_success = false;
@@ -133,9 +133,9 @@ export default function () {
     v3_success = check(res, { 'v3_ok': (r) => r.status === 200 });
     if (!v3_success) console.error(`[VU:${vuId}] Step 3 Fail: ${res.status} ${res.body}`);
   });
-  if (!v3_success) { sleep(1); return; }
+  if (!v3_success) { sleep(0.3); return; }
 
-  sleep(2); 
+  sleep(0.3); 
 
   // 4. Order
   let v4_success = false;
@@ -162,7 +162,7 @@ export default function () {
     }
   });
 
-  sleep(3);
+  sleep(0.3);
 }
 
 export function handleSummary(data) {
