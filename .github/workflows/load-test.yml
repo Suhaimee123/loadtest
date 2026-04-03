@@ -1,8 +1,6 @@
 name: Manual Load Test with k6
 
 on:
-  push:
-    branches: [ main ] # รันทันทีเมื่อมีการ push
   workflow_dispatch: # ทำให้มีปุ่มกด Run workflow ในหน้าเว็บ GitHub
   schedule:
     - cron: '0 */2 * * *' # รันอัตโนมัติทุกๆ 2ชั่วโมง
