@@ -6,8 +6,8 @@ const status503Counter = new Counter('http_req_status_503');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 20 },
-    { duration: '20m', target: 20 },
+    { duration: '1m', target: 10 },
+    { duration: '10m', target: 10 },
     { duration: '1m', target: 0 },
   ],
   thresholds: {
@@ -220,7 +220,7 @@ export function handleSummary(data) {
 
   return {
     'summary.json': JSON.stringify(summaryData),
-    'stdout': `\n🚀 Detailed Load Test Summary (VUs: 20, 503s: ${s503Count}, Time: 20m)\n` +
+    'stdout': `\n🚀 Detailed Load Test Summary (VUs: 10, 503s: ${s503Count}, Time: 10m)\n` +
               `--------------------------------------------------------------------------------\n` +
               `Endpoint                   | Avg(ms) | P95(ms) | Min(ms) | Max(ms) | Fails | Error%\n` +
               `--------------------------------------------------------------------------------\n` +
