@@ -10,7 +10,6 @@ export const options = {
   thresholds: {
     'http_req_duration{name:1. Verify Override Token}': [],
     'http_req_duration{name:2. Create Session}': [],
-    'http_req_duration{name:3. Add to Cart}': [],
     'http_req_duration{name:4. Place Order}': [],
   }
 };
@@ -110,44 +109,64 @@ export default function () {
 
   sleep(0.5); 
 
-  // 3. Add to Cart
-  let v3_success = false;
-  group('Step 3: Add to Cart', function () {
-    const res = http.post(`${baseUrl}/guest/events`, JSON.stringify({
-      type: "add_to_cart", ts: Date.now(), sessionId: sessionId,
-      tableName: `T-${vuId}`, contactName: contactName,
-      tableId: "i5xADQxqYVXrGG19C20n", branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
-      businessDay: businessDay, membersId: guestKey,
-      payload: {
-        menuId: "Nj8l8Smstya5aGnLDHKb", 
-        menuName: { th: "กะเพรา" }, qty: 1, total: 55, currency: "THB",
-        builds: [{ id: randomString(7), tierKey: "M", mods: {}, each: 55 }],
-        kitchenStation: "4VimoAU6yEYqIrt9wl3N"
-      }
-    }), { headers: headers, tags: { name: '3. Add to Cart' } });
-
-    trackStatus(res);
-    v3_success = check(res, { 'v3_ok': (r) => r.status === 200 });
-    if (!v3_success) console.error(`[VU:${vuId}] Step 3 Fail: ${res.status} ${res.body}`);
-  });
-  if (!v3_success) { sleep(0.3); return; }
-
-  sleep(0.3); 
+  sleep(0.5); 
 
   // 4. Order
   let v4_success = false;
   group('Step 4: Order', function () {
     const res = http.post(`${baseUrl}/guest/events/order`, JSON.stringify({
-      ts: Date.now(), sessionId: sessionId, currency: "THB", itemsCount: 1, subtotal: 55,
-      items: [{
-        menuId: "Nj8l8Smstya5aGnLDHKb", menuName: { th: "กะเพรา" }, qty: 1, total: 55,
-        builds: [{ id: randomString(7), tierKey: "M", each: 55, mods: {} }],
-        kitchenStation: "4VimoAU6yEYqIrt9wl3N"
-      }],
+      ts: Date.now(),
+      sessionId: sessionId,
+      currency: "THB",
+      itemsCount: 5,
+      subtotal: 407,
+      items: [
+        {
+          menuId: "R3BvK2IVDBpgpy3FcoRU",
+          menuName: { th: "ข้าวแพนงเนื้อ", en: "Panang Beef Curry on Rice", ms: "Kari Panang Daging atas Nasi" },
+          qty: 2,
+          total: 178,
+          builds: [
+            { id: randomString(7), tierKey: "M", each: 89, mods: {} },
+            { id: randomString(7), tierKey: "M", each: 89, mods: {} }
+          ],
+          kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+        },
+        {
+          menuId: "NeMtBZSoWpRypXWN6Csh",
+          menuName: { th: "ข้าวไก่ทอดสมุนไพร", en: "Herb Fried Chicken on Rice", ms: "Nasi Ayam Goreng Herba" },
+          qty: 1,
+          total: 75,
+          builds: [{ id: randomString(7), tierKey: "M", each: 75, mods: { "3b241c4d-0533-4749-bc2c-c18ae18a08a7": [{ th: "ซอสพริก", en: "Chili", ms: "Cili" }] } }],
+          kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+        },
+        {
+          menuId: "8JGdkoInRDrg6WDNk8m5",
+          menuName: { th: "ข้าวยำปักษ์ใต้", en: "Southern Thai Rice Salad", ms: "Nasi Kerabu Thai Selatan" },
+          qty: 1,
+          total: 69,
+          builds: [{ id: randomString(7), tierKey: "M", each: 69, mods: {} }],
+          kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+        },
+        {
+          menuId: "7dMGvg3fvZfVgnJ47phY",
+          menuName: { th: "ข้าวมัสมั่น", en: "Massaman Curry on Rice", ms: "Nasi Massaman atas Nasi" },
+          qty: 1,
+          total: 85,
+          builds: [{ id: randomString(7), tierKey: "M", each: 85, mods: { "ca398fce-8ac6-47a9-b8b6-dcd36e5f092a": [{ th: "ไก่", en: "Chicken", ms: "Ayam" }] } }],
+          kitchenStation: "4VimoAU6yEYqIrt9wl3N"
+        }
+      ],
       url: `https://warungpos.app/cart?pid=${sessionId}`,
-      contactName: contactName, tableName: `T-${vuId}`,
-      tableId: "i5xADQxqYVXrGG19C20n", branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
-      businessDay: businessDay, membersId: guestKey
+      ref: "",
+      userAgent: "K6-Load-Test",
+      contactName: contactName,
+      tableName: `T-${vuId}`,
+      tableId: "JOZzOkK2imMVuapcBtOY",
+      branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
+      groupId: "",
+      businessDay: businessDay,
+      membersId: guestKey
     }), { headers: headers, tags: { name: '4. Place Order' } });
 
     trackStatus(res);
@@ -195,7 +214,6 @@ export function handleSummary(data) {
   const details = [
     getStat('1. Verify Override Token'),
     getStat('2. Create Session'),
-    getStat('3. Add to Cart'),
     getStat('4. Place Order')
   ].filter(s => s !== null);
 
