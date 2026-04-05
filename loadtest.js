@@ -5,11 +5,8 @@ import { Counter } from 'k6/metrics';
 const status503Counter = new Counter('http_req_status_503');
 
 export const options = {
-  stages: [
-    { duration: '30s', target: 2 },
-    { duration: '4m', target: 2 },
-    { duration: '30s', target: 0 },
-  ],
+  vus: 2,
+  iterations: 10,
   thresholds: {
     'http_req_duration{name:1. Verify Override Token}': [],
     'http_req_duration{name:2. Create Session}': [],
@@ -25,6 +22,12 @@ function randomString(length) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
+}
+
+function getRandomDate(daysBack = 30) {
+  const date = new Date();
+  date.setDate(date.getDate() - Math.floor(Math.random() * daysBack));
+  return date.toISOString().split('T')[0];
 }
 
 // 🚀 รายชื่อ PID ชุดใหม่ 99 ตัว (TEST1 - TEST100) ที่เพิ่งสร้างสดๆ ร้อนๆ
@@ -62,13 +65,13 @@ export default function () {
 
   let token = '';
   let sessionId = '';
-  let businessDay = '';
+  const randomDay = getRandomDate(30);
 
   // 1. Verify
   let v1_success = false;
   group('Step 1: Verify', function () {
     const res = http.post(`${baseUrl}/guest/override/verify`, JSON.stringify({
-      code: "1001", pid: pid, id: adminId, reason: "Load Test 100 VUs - New Batch"
+      code: "1001", pid: pid, id: adminId, reason: `Load Test 10 Iterations - Day ${randomDay}`
     }), {
       headers: { 'Content-Type': 'application/json', 'x-guest-admin-id': adminId },
       tags: { name: '1. Verify Override Token' }
@@ -99,7 +102,7 @@ export default function () {
     if (v2_success) {
       const data = res.json();
       sessionId = data.sessionId;
-      businessDay = data.businessDay;
+      // เราจะไม่ใช้ data.businessDay จาก backend แต่จะใช้ randomDay ที่สุ่มมา
     }
   });
   if (!v2_success) { sleep(0.4); return; }
@@ -120,7 +123,7 @@ export default function () {
       type: "add_to_cart", ts: Date.now(), sessionId: sessionId,
       tableName: `T-${vuId}`, contactName: contactName,
       tableId: "i5xADQxqYVXrGG19C20n", branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
-      businessDay: businessDay, membersId: guestKey,
+      businessDay: randomDay, membersId: guestKey,
       payload: {
         menuId: "Nj8l8Smstya5aGnLDHKb", 
         menuName: { th: "กะเพรา" }, qty: 1, total: 55, currency: "THB",
@@ -150,7 +153,7 @@ export default function () {
       url: `https://warungpos.app/cart?pid=${sessionId}`,
       contactName: contactName, tableName: `T-${vuId}`,
       tableId: "i5xADQxqYVXrGG19C20n", branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
-      businessDay: businessDay, membersId: guestKey
+      businessDay: randomDay, membersId: guestKey
     }), { headers: headers, tags: { name: '4. Place Order' } });
 
     trackStatus(res);
@@ -220,7 +223,7 @@ export function handleSummary(data) {
 
   return {
     'summary.json': JSON.stringify(summaryData),
-    'stdout': `\n🚀 Detailed Load Test Summary (VUs: 2, 503s: ${s503Count}, Time: 5m)\n` +
+    'stdout': `\n🚀 Detailed Load Test Summary (VUs: 2, 503s: ${s503Count}, Iterations: 10)\n` +
               `--------------------------------------------------------------------------------\n` +
               `Endpoint                   | Avg(ms) | P95(ms) | Min(ms) | Max(ms) | Fails | Error%\n` +
               `--------------------------------------------------------------------------------\n` +
