@@ -5,8 +5,8 @@ import { Counter } from 'k6/metrics';
 const status503Counter = new Counter('http_req_status_503');
 
 export const options = {
-  vus: 2,
-  iterations: 10,
+  vus: 20,
+  iterations: 100,
   thresholds: {
     'http_req_duration{name:1. Verify Override Token}': [],
     'http_req_duration{name:2. Create Session}': [],
