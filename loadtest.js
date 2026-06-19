@@ -55,8 +55,12 @@ export default function () {
       tags: { name: '1. Verify Override Token' }
     });
     trackStatus(res);
-    v1_success = check(res, { 'v1_ok': (r) => r.status === 200 });
-    if (v1_success) token = res.json().token;
+    v1_success = check(res, { 'v1_ok': (r) => r.status === 200 && r.json().token });
+    if (v1_success) {
+      token = res.json().token;
+    } else {
+      console.error(`[VU:${vuId}] Step 1 Verify FAILED: PID: ${pid} Status: ${res.status} Body: ${res.body}`);
+    }
   });
   if (!v1_success) { sleep(0.1); return; }
   
@@ -76,11 +80,13 @@ export default function () {
       tags: { name: '2. Create Session' }
     });
     trackStatus(res);
-    v2_success = check(res, { 'v2_ok': (r) => r.status === 200 });
+    v2_success = check(res, { 'v2_ok': (r) => r.status === 200 && r.json().sessionId });
     if (v2_success) {
       const data = res.json();
       sessionId = data.sessionId;
       businessDay = data.businessDay;
+    } else {
+      console.error(`[VU:${vuId}] Step 2 Session FAILED: PID: ${pid} Status: ${res.status} Body: ${res.body}`);
     }
   });
   if (!v2_success) { sleep(0.4); return; }
@@ -147,16 +153,16 @@ export default function () {
       contactName: contactName,
       tableName: `T-${vuId}`,
       tableId: "JOZzOkK2imMVuapcBtOY",
-      branchId: "c9997882-3ada-4d57-bd62-3d38bfc4421a",
+      branchId: "17783504496072wu6k546t",
       groupId: "",
       businessDay: businessDay,
       membersId: guestKey
     }), { headers: headers, tags: { name: '4. Place Order' } });
 
     trackStatus(res);
-    v4_success = check(res, { 'v4_ok': (r) => r.status === 200 });
+    v4_success = check(res, { 'v4_ok': (r) => r.status === 200 && r.json().success !== false });
     if (v4_success) {
-      console.log(`[VU:${vuId}] Success Cycle -> PID: ${pid}`);
+      console.log(`[VU:${vuId}] Success Cycle -> PID: ${pid} Response: ${res.body}`);
     } else {
       console.error(`[VU:${vuId}] Step 4 FAILED -> PID: ${pid} Status: ${res.status} Reason: ${res.body}`);
     }

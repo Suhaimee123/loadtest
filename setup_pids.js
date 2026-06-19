@@ -6,6 +6,7 @@ const TOKEN = ''; // ระบุ Token ของคุณที่นี่
 const ITERATIONS = 100; // จำนวนโต๊ะที่ต้องการสร้าง
 const OUTPUT_FILE = 'pids.json';
 const BASE_URL = 'us-central1-warungpos-9e429.cloudfunctions.net';
+const BRANCH_ID = '17783504496072wu6k546t'; // รหัสสาขา
 // ===============================================
 
 async function post(path, payload) {
@@ -64,7 +65,8 @@ async function run() {
                 code: tableName,
                 zone: "Auto-Created",
                 capacity: 9,
-                isActive: true
+                isActive: true,
+                branchId: BRANCH_ID
             });
             
             const tableId = createRes.data.id;
